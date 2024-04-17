@@ -24,7 +24,7 @@ namespace CutWallByDoor
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
             Document doc = uidoc.Document;
-            // Retrieve a list of all walls and doors in the document//
+            // Retrieve a list of all walls and doors in the document///
             List<Wall> walls = new FilteredElementCollector(doc).OfClass(typeof(Wall)).Cast<Wall>().ToList();
             List<FamilyInstance> doors = new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).OfCategory(BuiltInCategory.OST_Doors).Cast<FamilyInstance>().ToList();
 
