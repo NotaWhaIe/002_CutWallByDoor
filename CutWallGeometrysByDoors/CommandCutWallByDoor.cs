@@ -11,7 +11,7 @@ namespace CutWallByDoor
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class Command : IExternalCommand
+    public class CommandCutWallByDoor : IExternalCommand
     {
         /// <summary>
         /// The main method of the command, invoked by Revit when the command is activated.
