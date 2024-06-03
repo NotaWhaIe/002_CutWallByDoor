@@ -8,15 +8,18 @@ namespace CutWallByDoor
 {
     public class App : IExternalApplication
     {
+        private DeleteLog deleteLogInstance;
         public Result OnStartup(UIControlledApplication application)
         {
+            deleteLogInstance = new DeleteLog();
+            deleteLogInstance.Initialize(application);
+
             application.CreateRibbonTab("Архитектура");
 
             _ = CreateRibbonPanel(application);
             
             return Result.Succeeded;
         }
-
         public RibbonPanel CreateRibbonPanel(UIControlledApplication application, string tabName = "Архитектура")
         {
             RibbonPanel ribbonPanel = application.CreateRibbonPanel(tabName, "Архитектура");
@@ -34,6 +37,7 @@ namespace CutWallByDoor
 
         public Result OnShutdown(UIControlledApplication application)
         {
+            deleteLogInstance?.Shutdown(application);
             return Result.Succeeded;
         }
 
