@@ -11,8 +11,6 @@ namespace CutWallByDoor
         private DeleteLog deleteLogInstance;
         public Result OnStartup(UIControlledApplication application)
         {
-            deleteLogInstance = new DeleteLog();
-            deleteLogInstance.Initialize(application);
 
             application.CreateRibbonTab("Архитектура");
 
@@ -22,6 +20,10 @@ namespace CutWallByDoor
         }
         public RibbonPanel CreateRibbonPanel(UIControlledApplication application, string tabName = "Архитектура")
         {
+            deleteLogInstance = new DeleteLog();
+            deleteLogInstance.Initialize(application);
+
+
             RibbonPanel ribbonPanel = application.CreateRibbonPanel(tabName, "Архитектура");
             AddPushButton(ribbonPanel, "Объединение", Assembly.GetExecutingAssembly().Location, "CutWallByDoor.CommandCutWallByDoor", "Объединит стены с семейством Дверь_Без основы", @"/CutWallByDoor;component/Resources/walldoor.png");
             AddPushButton(ribbonPanel, "Проверка\nмарок ", Assembly.GetExecutingAssembly().Location, "CutWallByDoor.CommandCheckMarkAr", "Проверка марок перемычек, окон и витражей", @"/CutWallByDoor;component/Resources/checkMarkAr32.png") ;

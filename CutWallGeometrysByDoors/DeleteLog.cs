@@ -13,7 +13,7 @@ using Autodesk.Revit.UI;
 namespace CutWallByDoor
 {
     [Autodesk.Revit.Attributes.TransactionAttribute(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class DeleteLog 
+    public class DeleteLog
     {
         private Timer logTimer;
         private List<Tuple<string, string, int, string>> deletionLogBuffer = new List<Tuple<string, string, int, string>>();
@@ -26,7 +26,7 @@ namespace CutWallByDoor
 
         public void Initialize(UIControlledApplication application)
         {
-            if (!IsUserAllowed()) return;
+            if (!IsUserAllowed().Result) return;
 
             application.ControlledApplication.DocumentOpened += OnDocumentOpened;
             application.ControlledApplication.DocumentChanged += HandleDocumentChanged;
@@ -41,41 +41,40 @@ namespace CutWallByDoor
             logTimer.Dispose();
             if (elementsDeleted)
             {
-                SaveAndSync();
-                MatchElements();
+                SaveAndSync().Wait();
+                MatchElements().Wait();
             }
         }
 
         private void OnDocumentOpened(object sender, DocumentOpenedEventArgs args)
         {
             currentDocument = args.Document;
-            ExportProjectElements();
+            ExportProjectElements().Wait();
         }
 
         private void OnDocumentSynchronizedWithCentral(object sender, DocumentSynchronizedWithCentralEventArgs args)
         {
             currentDocument = args.Document;
-            ExportProjectElements();
+            ExportProjectElements().Wait();
             if (elementsDeleted)
             {
-                SaveAndSync();
-                MatchElements();
+                SaveAndSync().Wait();
+                MatchElements().Wait();
             }
         }
-
 
         private void OnDocumentSaved(object sender, DocumentSavedEventArgs args)
         {
             currentDocument = args.Document;
-            ExportProjectElements();
+            ExportProjectElements().Wait();
             if (elementsDeleted)
             {
-                SaveAndSync();
-                MatchElements();
+                SaveAndSync().Wait();
+                MatchElements().Wait();
             }
         }
 
-        private bool IsUserAllowed()
+        private async Task<bool> IsUserAllowed()
         {
             var userName = Environment.UserName.ToLowerInvariant();
             var computerName = Environment.MachineName.ToLowerInvariant();
@@ -83,9 +82,9 @@ namespace CutWallByDoor
 
             foreach (var userFile in userFiles)
             {
-                var users = File.ReadAllLines(userFile, Encoding.UTF8)
-                                .Select(u => u.Trim().ToLowerInvariant())
-                                .ToList();
+                var users = await Task.Run(() => File.ReadAllLines(userFile, Encoding.UTF8)
+                            .Select(u => u.Trim().ToLowerInvariant())
+                            .ToList());
                 if (users.Contains(userName) || users.Contains(computerName))
                 {
                     userPrefix = Path.GetFileNameWithoutExtension(userFile).Split('_')[0];
@@ -115,17 +114,17 @@ namespace CutWallByDoor
         private void SetupTimer()
         {
             logTimer = new Timer(900000) { AutoReset = true, Enabled = true };
-            logTimer.Elapsed += (sender, e) =>
+            logTimer.Elapsed += async (sender, e) =>
             {
                 if (elementsDeleted)
                 {
-                    SaveAndSync();
-                    MatchElements();
+                    await SaveAndSync();
+                    await MatchElements();
                 }
             };
         }
 
-        private void SaveAndSync()
+        private async Task SaveAndSync()
         {
             if (currentDocument == null) return;
 
@@ -151,22 +150,22 @@ namespace CutWallByDoor
                 deletionLogBuffer.Clear();
             }
 
-            TrySaveToFile(() =>
+            await TrySaveToFile(async () =>
             {
                 if (!File.Exists(filePath))
                 {
-                    File.WriteAllText(filePath, "Project Name,Element ID,Time,User\n", Encoding.UTF8);
+                    await Task.Run(() => File.WriteAllText(filePath, "Project Name,Element ID,Time,User\n", Encoding.UTF8));
                 }
 
                 if (bufferCopy.Count > 0)
                 {
-                    File.AppendAllLines(filePath, bufferCopy.Select(entry =>
-                        $"{entry.Item1},{entry.Item3},{entry.Item2},{entry.Item4}"), Encoding.UTF8);
+                    await Task.Run(() => File.AppendAllLines(filePath, bufferCopy.Select(entry =>
+                        $"{entry.Item1},{entry.Item3},{entry.Item2},{entry.Item4}"), Encoding.UTF8));
                 }
             }, filePath);
         }
 
-        private void MatchElements()
+        private async Task MatchElements()
         {
             if (currentDocument == null) return;
 
@@ -183,42 +182,45 @@ namespace CutWallByDoor
             string filePathDB = Path.Combine(sourceTablesFolder, $"{folderName}_Db.csv");
             string filePathARDeleted = Path.Combine(folderPath, $"{folderName}Deleted.csv");
 
-            TrySaveToFile(() =>
+            await TrySaveToFile(async () =>
             {
                 if (!File.Exists(filePathAR) || !File.Exists(filePathDB)) return;
 
-                var arData = File.ReadAllLines(filePathAR, Encoding.UTF8)
-                    .Skip(1)
+                var arData = await Task.Run(() => File.ReadAllLines(filePathAR, Encoding.UTF8))
+                    .ContinueWith(task => task.Result.Skip(1)
                     .Select(line => line.Split(','))
                     .GroupBy(parts => int.Parse(parts[1]))
-                    .ToDictionary(g => g.Key, g => g.First());
+                    .ToDictionary(g => g.Key, g => g.First()));
 
-                var dbData = File.ReadAllLines(filePathDB, Encoding.UTF8)
-                    .Skip(1)
+                var dbData = await Task.Run(() => File.ReadAllLines(filePathDB, Encoding.UTF8))
+                    .ContinueWith(task => task.Result.Skip(1)
                     .Select(line => line.Split(','))
                     .GroupBy(parts => int.Parse(parts[1]))
-                    .ToDictionary(g => g.Key, g => g.First());
+                    .ToDictionary(g => g.Key, g => g.First()));
 
-                TrySaveToFile(() =>
+                await TrySaveToFile(async () =>
                 {
-                    using (var sw = new StreamWriter(filePathARDeleted, false, Encoding.UTF8))
+                    await Task.Run(() =>
                     {
-                        sw.WriteLine("Project Name,Element ID,Element Type,Element Name,Level,Time,User");
-                        foreach (var arEntry in arData)
+                        using (var sw = new StreamWriter(filePathARDeleted, false, Encoding.UTF8))
                         {
-                            if (dbData.TryGetValue(arEntry.Key, out var dbEntry))
+                            sw.WriteLine("Project Name,Element ID,Element Type,Element Name,Level,Time,User");
+                            foreach (var arEntry in arData)
                             {
-                                sw.WriteLine($"{arEntry.Value[0]},{arEntry.Key},{dbEntry[2]},{dbEntry[3]},{dbEntry[4]},{arEntry.Value[2]},{arEntry.Value[3]}");
+                                if (dbData.TryGetValue(arEntry.Key, out var dbEntry))
+                                {
+                                    sw.WriteLine($"{arEntry.Value[0]},{arEntry.Key},{dbEntry[2]},{dbEntry[3]},{dbEntry[4]},{arEntry.Value[2]},{arEntry.Value[3]}");
+                                }
                             }
                         }
-                    }
+                    });
                 }, filePathARDeleted);
 
-                elementsDeleted = false; // Reset the flag after processing
+                elementsDeleted = false; // Сброс флага после обработки
             }, filePathARDeleted);
         }
 
-        private void TrySaveToFile(Action saveAction, string filePath)
+        private async Task TrySaveToFile(Func<Task> saveAction, string filePath)
         {
             const int maxRetries = 2;
             int retries = 0;
@@ -228,18 +230,18 @@ namespace CutWallByDoor
             {
                 try
                 {
-                    saveAction();
+                    await saveAction();
                     success = true;
                 }
                 catch (IOException)
                 {
                     retries++;
-                    Task.Delay(180000).Wait(); // Wait for 3 minutes before retrying
+                    await Task.Delay(180000); // Ожидание 3 минуты перед повторной попыткой
                 }
             }
         }
 
-        private void ExportProjectElements()
+        private async Task ExportProjectElements()
         {
             if (currentDocument == null) return;
 
@@ -272,16 +274,19 @@ namespace CutWallByDoor
                     projectName, element.Id.IntegerValue, elementType, elementName, level);
             }).ToList();
 
-            TrySaveToFile(() =>
+            await TrySaveToFile(async () =>
             {
-                using (var sw = new StreamWriter(filePath, false, Encoding.UTF8))
+                await Task.Run(() =>
                 {
-                    sw.WriteLine("Project Name,Element ID,Element Type,Element Name,Level");
-                    foreach (var entry in elementData)
+                    using (var sw = new StreamWriter(filePath, false, Encoding.UTF8))
                     {
-                        sw.WriteLine($"{entry.Item1},{entry.Item2},{entry.Item3},{entry.Item4},{entry.Item5}");
+                        sw.WriteLine("Project Name,Element ID,Element Type,Element Name,Level");
+                        foreach (var entry in elementData)
+                        {
+                            sw.WriteLine($"{entry.Item1},{entry.Item2},{entry.Item3},{entry.Item4},{entry.Item5}");
+                        }
                     }
-                }
+                });
             }, filePath);
         }
     }
