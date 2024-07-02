@@ -16,6 +16,7 @@ namespace CutWallByDoor
     public class DeleteLog
 
 
+
     {
         private Timer logTimer;
         private List<Tuple<string, string, int, string>> deletionLogBuffer = new List<Tuple<string, string, int, string>>();
